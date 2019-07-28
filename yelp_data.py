@@ -1,53 +1,7 @@
-import requests
-import sys
-import config
-import time
-import json
-import mysql.connector
-import pandas as pd
-import matplotlib as plt
-from mysql.connector import errorcode
-%load_ext autoreload
-
-%autoreload
+from hylper import Hyelper
 # Your code here; use a function or loop to retrieve all the results from your original request
 
-def yelp_review_call(api_key, biz_id):
-    url = f'https://api.yelp.com/v3/businesses/{biz_id}/reviews'
-    headers = {'Authorization': 'Bearer {}'.format(api_key)}
-    response = requests.get(url, headers=headers)
-    return response
 
-def yelp_call(url_params, api_key):
-    url = 'https://api.yelp.com/v3/businesses/search'
-    headers = {'Authorization': 'Bearer {}'.format(api_key)}
-    response = requests.get(url, headers=headers, params=url_params)
-    return response
-
-
-def get_businesses(url_params, api_key):
-    response = yelp_call(url_params, api_key)
-    print(response.json().keys())
-    if 'businesses' in response.json():
-        data = response.json()['businesses']
-    else:
-        raise KeyError
-    return data
-
-def all_results(url_params, api_key):
-    #declare url here
-    #NOTE refactor into Config later
-    response = yelp_call(url_params, api_key)
-    num = response.json()['total']
-    print('{} total matches found.'.format(num))
-    cur = 0
-    results = []
-    while cur < num and cur < 1000:
-        url_params['offset'] = cur
-        results.append(get_businesses(url_params, api_key))
-        time.sleep(.5) #Wait a second
-        cur += 50
-    return results
 
 term = 'bbq'
 location = 'Nashville TN'
@@ -60,18 +14,10 @@ df = all_results(url_params, config.api_key)
 
 print(len(df))biz_id = df[0][0]["id"]
 response = yelp_review_call(config.api_key, biz_id)#method for connecting to yelp database, return tuple of cnx/c to avoid scoping
-def connect_to_yelp():
-    cnx = mysql.connector.connect(**config.config)
-    c = cnx.cursor()
-    statement = """USE yelp"""
-    c.execute(statement)
-    return (c, cnx)
-    test_id = df[0][0]["id"]
 response = yelp_review_call(config.api_key, test_id)reviews = json.loads(response.text)
 reviews['reviews'][0]
 #time created, id, rating, {foregin key}import pandas as pd
-import mysql.connector
-from mysql.connector import errorcode
+
 
 cnx = mysql.connector.connect(**config.config)
 c = cnx.cursor()
@@ -80,67 +26,7 @@ c.execute("""DROP DATABASE IF EXISTS yelp""")
 
 DB_NAME = 'yelp'
 
-def create_database(cursor):
-    """Creates Database and Catch errors"""
-    try:
-        c.execute(
-            "CREATE DATABASE {} DEFAULT CHARACTER SET 'utf8'".format(DB_NAME))
-    except mysql.connector.Error as err:
-        print("Failed creating database: {}".format(err))
-        exit(1)
 
-try:
-    c.execute("USE {}".format(DB_NAME))
-except mysql.connector.Error as err:
-    print("Database {} does not exists.".format(DB_NAME))
-    #if DB doesn't exist, create the databse for you
-    if err.errno == errorcode.ER_BAD_DB_ERROR:
-        create_database(c)
-        print("Database {} created successfully.".format(DB_NAME))
-        cnx.database = DB_NAME
-    else:
-        print(err)
-        exit(1)
-
-        
-
-TABLES = {}
-TABLES['restaurants'] = """
-        CREATE TABLE `restaurants` (
-           `restaurant_id` varchar(32) NOT NULL,
-           `name` TEXT NOT NULL,
-           `rating` DECIMAL(2,1),
-           `price` TEXT,
-           PRIMARY KEY(restaurant_id)
-        ) ENGINE=InnoDB
-        """
-
-TABLES['reviews'] = """
-        CREATE TABLE `reviews` (
-           `review_id` VARCHAR(32) NOT NULL,
-           `time_created` DATE NOT NULL,
-           `review_text` TINYTEXT,
-           `user_rating` DECIMAL(2,1),
-           `restaurant_id` VARCHAR(32),
-           PRIMARY KEY(review_id),
-           FOREIGN KEY(restaurant_id) REFERENCES restaurants(restaurant_id)
-        ) ENGINE=InnoDB
-        """
-
-for table_name in TABLES:
-    create_table_script = TABLES[table_name]
-    try:
-        print("Creating table {}: ".format(table_name), end='')
-        c.execute(create_table_script)
-    except mysql.connector.Error as err:
-        if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-            print("already exists.")
-        else:
-            print(err.msg)
-    else:
-        print("OK")
-c.close()
-cnx.close()
 
 
 #returns true if all the necessary keys are in the restaurant dict
@@ -158,7 +44,7 @@ def all_review_elements(review):
         return True
     else:
         return False
-    
+
 cnx = mysql.connector.connect(**config.config)
 c = cnx.cursor()
 
@@ -177,18 +63,18 @@ def populate_businesses(df):
                 #sql for inserting this restaurants
                 insert_str = f"""
                     INSERT INTO restaurants
-                    (restaurant_id, name, rating, price) 
-                    VALUES ("{rest_id}", 
-                            "{name}", 
-                            "{rating}", 
+                    (restaurant_id, name, rating, price)
+                    VALUES ("{rest_id}",
+                            "{name}",
+                            "{rating}",
                             "{price}")
-                    """    
-                #execute and save    
+                    """
+                #execute and save
                 c.execute(insert_str)
                 cnx.commit()
     #return dummy string
     return "Data Added"
-    
+
 populate_businesses(df)
 cnx.close()
 #use select to retrieve list of all business ids
@@ -242,19 +128,19 @@ def populate_reviews(df):
             #sql for inserting this restaurants
             insert_str = f"""
                 INSERT INTO reviews
-                (review_id, time_created, review_text, user_rating, restaurant_id) 
-                VALUES ("{rev_id}", 
+                (review_id, time_created, review_text, user_rating, restaurant_id)
+                VALUES ("{rev_id}",
                         "{time_stamp}",
                         "{rev_text}",
-                        "{rev_rating}", 
+                        "{rev_rating}",
                         "{rest_id}")
-                """    
-            #execute and save    
+                """
+            #execute and save
             c.execute(insert_str)
             cnx.commit()
     #return dummy string
     return "Data Added"
-    
+
 populate_reviews(reviews)
 cnx.close()
 c, cnx = connect_to_yelp()
@@ -262,7 +148,7 @@ def display_query(query):
     c.execute(query)
     df = pd.DataFrame(c.fetchall())
     df.columns = [column[0] for column in c.description]
-    return df.head() 
+    return df.head()
 
 
 def top_five():
@@ -276,7 +162,7 @@ top_five()# Your code here; use a function or loop to retrieve all the results f
 def bottom_five():
     bottom_five_query = """SELECT name, rating
                     FROM restaurants
-                    ORDER BY rating 
+                    ORDER BY rating
                     LIMIT 5"""
     return display_query(bottom_five_query)
 
@@ -307,7 +193,7 @@ low_rated_restaurants()def oldest_review():
 
 oldest_review()def rating_for_old_review():
     old_rating_query = """SELECT name, time_created, rating
-                        FROM restaurants 
+                        FROM restaurants
                         JOIN reviews
                         ORDER BY time_created ASC
                         LIMIT 1"""
@@ -319,7 +205,7 @@ rating_for_old_review()def newest_review_for_best():
                     WHERE restaurant_id = (SELECT restaurant_id
                                             FROM restaurants
                                             ORDER BY rating DESC
-                                            LIMIT 1)                  
+                                            LIMIT 1)
                     ORDER BY time_created DESC
                     LIMIT 1"""
     return display_query(new_best_q)
@@ -329,7 +215,7 @@ newest_review_for_best()def oldest_review_for_worst():
                     WHERE restaurant_id = (SELECT restaurant_id
                                             FROM restaurants
                                             ORDER BY rating
-                                            LIMIT 1)                  
+                                            LIMIT 1)
                     ORDER BY time_created
                     LIMIT 1"""
     return display_query(old_worst_q)
@@ -412,7 +298,7 @@ def connect_to_yelp():
     statement = """USE yelp"""
     c.execute(statement)
     return (c, cnx)
-    
+
 test_id = df[0][0]["id"]
 response = yelp_review_call(config.api_key, test_id)
 reviews = json.loads(response.text)
@@ -451,7 +337,7 @@ except mysql.connector.Error as err:
         print(err)
         exit(1)
 
-        
+
 
 TABLES = {}
 TABLES['restaurants'] = """
@@ -508,7 +394,7 @@ def all_review_elements(review):
         return True
     else:
         return False
-    
+
 
 cnx = mysql.connector.connect(**config.config)
 c = cnx.cursor()
@@ -528,18 +414,18 @@ def populate_businesses(df):
                 #sql for inserting this restaurants
                 insert_str = f"""
                     INSERT INTO restaurants
-                    (restaurant_id, name, rating, price) 
-                    VALUES ("{rest_id}", 
-                            "{name}", 
-                            "{rating}", 
+                    (restaurant_id, name, rating, price)
+                    VALUES ("{rest_id}",
+                            "{name}",
+                            "{rating}",
                             "{price}")
-                    """    
-                #execute and save    
+                    """
+                #execute and save
                 c.execute(insert_str)
                 cnx.commit()
     #return dummy string
     return "Data Added"
-    
+
 populate_businesses(df)
 cnx.close()
 
@@ -597,19 +483,19 @@ def populate_reviews(df):
             #sql for inserting this restaurants
             insert_str = f"""
                 INSERT INTO reviews
-                (review_id, time_created, review_text, user_rating, restaurant_id) 
-                VALUES ("{rev_id}", 
+                (review_id, time_created, review_text, user_rating, restaurant_id)
+                VALUES ("{rev_id}",
                         "{time_stamp}",
                         "{rev_text}",
-                        "{rev_rating}", 
+                        "{rev_rating}",
                         "{rest_id}")
-                """    
-            #execute and save    
+                """
+            #execute and save
             c.execute(insert_str)
             cnx.commit()
     #return dummy string
     return "Data Added"
-    
+
 populate_reviews(reviews)
 cnx.close()
 
@@ -618,7 +504,7 @@ def display_query(query):
     c.execute(query)
     df = pd.DataFrame(c.fetchall())
     df.columns = [column[0] for column in c.description]
-    return df.head() 
+    return df.head()
 
 
 def top_five():
@@ -633,7 +519,7 @@ top_five()
 def bottom_five():
     bottom_five_query = """SELECT name, rating
                     FROM restaurants
-                    ORDER BY rating 
+                    ORDER BY rating
                     LIMIT 5"""
     return display_query(bottom_five_query)
 
@@ -669,7 +555,7 @@ def oldest_review():
 oldest_review()
 def rating_for_old_review():
     old_rating_query = """SELECT name, time_created, rating
-                        FROM restaurants 
+                        FROM restaurants
                         JOIN reviews
                         ORDER BY time_created ASC
                         LIMIT 1"""
@@ -682,7 +568,7 @@ def newest_review_for_best():
                     WHERE restaurant_id = (SELECT restaurant_id
                                             FROM restaurants
                                             ORDER BY rating DESC
-                                            LIMIT 1)                  
+                                            LIMIT 1)
                     ORDER BY time_created DESC
                     LIMIT 1"""
     return display_query(new_best_q)
@@ -693,7 +579,7 @@ def oldest_review_for_worst():
                     WHERE restaurant_id = (SELECT restaurant_id
                                             FROM restaurants
                                             ORDER BY rating
-                                            LIMIT 1)                  
+                                            LIMIT 1)
                     ORDER BY time_created
                     LIMIT 1"""
     return display_query(old_worst_q)
@@ -706,5 +592,3 @@ def graph_price_count():
 
 graph_price_count()
 #Your code here
-
-
