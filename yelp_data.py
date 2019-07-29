@@ -1,14 +1,5 @@
-from hylper import Hyelper
 # Your code here; use a function or loop to retrieve all the results from your original request
 
-
-
-term = 'bbq'
-location = 'Nashville TN'
-url_params = {  'term': term.replace(' ', '+'),
-                'location': location.replace(' ', '+'),
-                'limit' : 50
-             }
 df = all_results(url_params, config.api_key)
 
 
@@ -48,7 +39,6 @@ def all_review_elements(review):
 cnx = mysql.connector.connect(**config.config)
 c = cnx.cursor()
 
-c.execute("""USE yelp""")
 def populate_businesses(df):
 
 #above should be an extra quote, jupyter broke
@@ -115,7 +105,7 @@ reviews[4]#some review text has quotes and was causing conflicts when adding to 
 def replace_quotes(text):
     return text.replace(r'"', r'\"')c, cnx = connect_to_yelp()
 
-def populate_reviews(df):
+def populate_reviews():
 
     for review in reviews:
         if all_review_elements(review):
@@ -335,7 +325,7 @@ except mysql.connector.Error as err:
         cnx.database = DB_NAME
     else:
         print(err)
-        exit(1)
+        sys.exit(1)
 
 
 
