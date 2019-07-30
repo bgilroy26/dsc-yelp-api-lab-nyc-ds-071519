@@ -2,33 +2,33 @@ from mysql.connector import errorcode
 import mysql.connector
 import requests
 import time
+import sys
 
 DB_NAME = 'yelp'
 
-def yelp_call(url_params, api_key):
+def yelp_call(url_params, api_key, session):
     url = 'https://api.yelp.com/v3/businesses/search'
     headers = {'Authorization': 'Bearer {}'.format(api_key)}
-    response = requests.get(url, headers=headers, params=url_params)
+    response = session.get(url, headers=headers, params=url_params)
     return response
 
-def pull_businesses(url_params, api_key):
-    response = yelp_call(url_params, api_key)
+def pull_businesses(url_params, api_key, session):
+    response = yelp_call(url_params, api_key, session)
     data = response.json()['businesses']
     return data
 
 def get_businesses(url_params, api_key):
-    #declare url here
-    #NOTE refactor into Config later
-    response = yelp_call(url_params, api_key)
+    s = requests.Session()
+    response = yelp_call(url_params, api_key, s)
     num = response.json()['total']
     cur = 0
     results = []
     while cur < num and cur < 1000:
         url_params['offset'] = cur
-        results.append(pull_businesses(url_params, api_key))
+        results.append(pull_businesses(url_params, api_key, s))
         time.sleep(.5) #Wait a second
         cur += 50
-    print("Businesses Pulled")
+    print("Businesses pulled")
     return results
 
 def drop_database(cursor):
@@ -66,8 +66,6 @@ def strip_businesses_ids(businesses):
     return business_ids
 
 
-
-
 #returns true if all the necessary keys are in the restaurant dict
 def all_rest_elements(restaurant):
     #this the way check if all vital keys in restaurant
@@ -98,6 +96,7 @@ def populate_businesses(businesses, cnx, cursor):
                 #execute and save
                 cursor.execute(insert_str)
                 cnx.commit()
+    print("Businesses populated")
 
 def add_biz_id(data, biz_id):
     for review in data:
@@ -105,30 +104,35 @@ def add_biz_id(data, biz_id):
     #data will be edited, so just return data
     return data
 
-def yelp_review_call(api_key, biz_id):
+def yelp_review_call(api_key, biz_id, session):
     url = f'https://api.yelp.com/v3/businesses/{biz_id}/reviews'
     headers = {'Authorization': 'Bearer {}'.format(api_key)}
-    response = requests.get(url, headers=headers)
+    response = session.get(url, headers=headers)
     return response
 
 #retrieves all reviews and puts them into json format
 def get_reviews(api_key, all_biz_ids):
     #initialize all_reviews for mapping
     all_reviews = []
+    s = requests.Session()
     #go through each of the biz ids, get the data corresponding to it,
     #and add the biz id for foreign key use later
     for biz_id in all_biz_ids:
         #gets a dictionary from the API adding biz Id to the url
-        response = yelp_review_call(api_key, biz_id)
-        data = response.json()['reviews']
+        response = yelp_review_call(api_key, biz_id, s)
+        try:
+            data = response.json()['reviews']
+        except KeyError:
+            print(biz_id)
         #add restaurant_id
         data_with_biz = add_biz_id(data, biz_id)
         all_reviews.extend(data_with_biz)
+    print("Reviews pulled")
     return all_reviews
 
 #same but for review
 def all_review_elements(review):
-    if all (k in review for k in ("id","restaurant_id", "rating", "time_created")):
+    if all (k in review for k in ("id","restaurant_id", "rating", "text", "time_created")):
         return True
     else:
         return False
@@ -161,3 +165,4 @@ def populate_reviews(reviews, cnx, cursor):
             #execute and save
             cursor.execute(insert_str)
             cnx.commit()
+    print("Reviews populated")
